@@ -1,0 +1,4 @@
+# Hide vendored third-party code from GitHub diffs and language stats
+app/static/vendor/** linguist-generated=true
+app/static/vendor/** linguist-vendored=true
+*.glb binary
