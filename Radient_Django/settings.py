@@ -141,13 +141,25 @@ HTTPS_ONLY = env_bool('DJANGO_HTTPS_ONLY', not DEBUG)
 SECURE_SSL_REDIRECT = HTTPS_ONLY
 SESSION_COOKIE_SECURE = HTTPS_ONLY
 CSRF_COOKIE_SECURE = HTTPS_ONLY
-SECURE_HSTS_SECONDS = 31536000 if HTTPS_ONLY else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS_ONLY
+
+# HSTS is opt-in. Browsers remember it for max-age and it cannot be undone remotely, and
+# includeSubDomains also forces https on every subdomain, so both are off unless an operator asks.
+# Preload is never enabled.
+try:
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '').strip() or '0')
+except ValueError:
+    SECURE_HSTS_SECONDS = -1
+if SECURE_HSTS_SECONDS < 0:
+    raise ImproperlyConfigured('DJANGO_HSTS_SECONDS must be a non-negative integer.')
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('DJANGO_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = False
 # Only trust X-Forwarded-Proto when explicitly told a TLS-terminating proxy sets it.
 if env_bool('DJANGO_TRUST_PROXY_SSL', False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-# HSTS preload is a long-lived, hard-to-undo commitment for the whole domain; deliberately not enabled.
-SILENCED_SYSTEM_CHECKS = ['security.W021']
+# check --deploy: W021 (preload), W004 (HSTS not set) and W005 (includeSubDomains) are deliberate:
+# HSTS/includeSubDomains/preload are irreversible commitments for a domain (some deployments here use
+# plain-HTTP subdomains or bare IPs), so they are opt-in. The HTTPS redirect and secure cookies are on.
+SILENCED_SYSTEM_CHECKS = ['security.W004', 'security.W005', 'security.W021']
 
 ROOT_URLCONF = 'Radient_Django.urls'
 

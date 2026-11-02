@@ -46,20 +46,56 @@ class EnvSettingsTest(TestCase):
     def test_production_defaults_enable_https_only(self):
         r = run_settings('print(s.SECURE_SSL_REDIRECT, s.SESSION_COOKIE_SECURE, s.CSRF_COOKIE_SECURE, s.SECURE_HSTS_SECONDS)',
                          DJANGO_SECRET_KEY=STRONG_KEY, DJANGO_ALLOWED_HOSTS='viewer.example.org')
-        self.assertEqual(r.stdout.strip(), 'True True True 31536000', r.stderr)
+        # HTTPS redirect + secure cookies on by default; HSTS is opt-in so it is 0 here
+        self.assertEqual(r.stdout.strip(), 'True True True 0', r.stderr)
 
     def test_proxy_ssl_header_is_only_trusted_when_opted_in(self):
         base = dict(DJANGO_SECRET_KEY=STRONG_KEY, DJANGO_ALLOWED_HOSTS='viewer.example.org')
         self.assertEqual(run_settings('print(s.SECURE_PROXY_SSL_HEADER)', **base).stdout.strip(), 'None')
         self.assertIn('X_FORWARDED_PROTO', run_settings('print(s.SECURE_PROXY_SSL_HEADER)', DJANGO_TRUST_PROXY_SSL='1', **base).stdout)
 
-    def test_check_deploy_is_clean(self):
+    def check_deploy(self, **extra):
         env = {'PATH': os.environ['PATH'], 'DJANGO_SECRET_KEY': STRONG_KEY, 'DJANGO_ALLOWED_HOSTS': 'viewer.example.org',
-               'DJANGO_TRUST_PROXY_SSL': '1'}
+               'DJANGO_TRUST_PROXY_SSL': '1', **extra}
         r = subprocess.run([sys.executable, 'manage.py', 'check', '--deploy', '--fail-level', 'WARNING'],
                            cwd=ROOT, env=env, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('no issues', r.stdout)
+
+    def test_check_deploy_is_clean_with_defaults(self):
+        self.check_deploy()
+
+    def test_check_deploy_is_clean_with_hsts_enabled(self):
+        self.check_deploy(DJANGO_HSTS_SECONDS='3600')
+        self.check_deploy(DJANGO_HSTS_SECONDS='3600', DJANGO_HSTS_INCLUDE_SUBDOMAINS='1')
+
+    def test_hsts_is_off_by_default_and_never_preloaded(self):
+        r = run_settings('print(s.SECURE_HSTS_SECONDS, s.SECURE_HSTS_INCLUDE_SUBDOMAINS, s.SECURE_HSTS_PRELOAD)',
+                         DJANGO_SECRET_KEY=STRONG_KEY, DJANGO_ALLOWED_HOSTS='viewer.example.org')
+        self.assertEqual(r.stdout.strip(), '0 False False', r.stderr)
+
+    def test_hsts_seconds_opt_in_without_subdomains(self):
+        r = run_settings('print(s.SECURE_HSTS_SECONDS, s.SECURE_HSTS_INCLUDE_SUBDOMAINS, s.SECURE_HSTS_PRELOAD)',
+                         DJANGO_SECRET_KEY=STRONG_KEY, DJANGO_ALLOWED_HOSTS='viewer.example.org', DJANGO_HSTS_SECONDS='3600')
+        self.assertEqual(r.stdout.strip(), '3600 False False', r.stderr)
+
+    def test_hsts_subdomains_is_a_separate_opt_in(self):
+        r = run_settings('print(s.SECURE_HSTS_SECONDS, s.SECURE_HSTS_INCLUDE_SUBDOMAINS, s.SECURE_HSTS_PRELOAD)',
+                         DJANGO_SECRET_KEY=STRONG_KEY, DJANGO_ALLOWED_HOSTS='viewer.example.org',
+                         DJANGO_HSTS_SECONDS='3600', DJANGO_HSTS_INCLUDE_SUBDOMAINS='1')
+        self.assertEqual(r.stdout.strip(), '3600 True False', r.stderr)
+
+    def test_subdomains_flag_alone_does_not_turn_hsts_on(self):
+        r = run_settings('print(s.SECURE_HSTS_SECONDS)', DJANGO_SECRET_KEY=STRONG_KEY,
+                         DJANGO_ALLOWED_HOSTS='viewer.example.org', DJANGO_HSTS_INCLUDE_SUBDOMAINS='1')
+        self.assertEqual(r.stdout.strip(), '0', r.stderr)
+
+    def test_invalid_hsts_seconds_refuses_to_start(self):
+        for bad in ('abc', '-1', '1.5'):
+            r = run_settings('s.SECURE_HSTS_SECONDS', DJANGO_SECRET_KEY=STRONG_KEY,
+                             DJANGO_ALLOWED_HOSTS='viewer.example.org', DJANGO_HSTS_SECONDS=bad)
+            self.assertNotEqual(r.returncode, 0, bad)
+            self.assertIn('DJANGO_HSTS_SECONDS', r.stderr)
 
 
 class HeadersTest(TestCase):
@@ -101,14 +137,25 @@ class HeadersTest(TestCase):
         r404 = self.client.get('/nope')
         self.assertIn("frame-ancestors 'none'", r404['Content-Security-Policy'])
 
-    @override_settings(SECURE_SSL_REDIRECT=True, SECURE_HSTS_SECONDS=31536000, SECURE_HSTS_INCLUDE_SUBDOMAINS=True)
-    def test_https_only_redirects_http_and_sends_hsts(self):
+    @override_settings(SECURE_SSL_REDIRECT=True)
+    def test_https_only_redirects_http_and_sends_no_hsts_by_default(self):
         r = self.client.get('/')
         self.assertEqual(r.status_code, 301)
         self.assertTrue(r['Location'].startswith('https://'))
         r = self.client.get('/', secure=True)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r['Strict-Transport-Security'], 'max-age=31536000; includeSubDomains')
+        self.assertNotIn('Strict-Transport-Security', r)
+
+    @override_settings(SECURE_SSL_REDIRECT=True, SECURE_HSTS_SECONDS=3600)
+    def test_hsts_header_without_subdomains_or_preload(self):
+        r = self.client.get('/', secure=True)
+        self.assertEqual(r['Strict-Transport-Security'], 'max-age=3600')
+
+    @override_settings(SECURE_SSL_REDIRECT=True, SECURE_HSTS_SECONDS=3600, SECURE_HSTS_INCLUDE_SUBDOMAINS=True)
+    def test_hsts_header_with_subdomains_when_opted_in(self):
+        r = self.client.get('/', secure=True)
+        self.assertEqual(r['Strict-Transport-Security'], 'max-age=3600; includeSubDomains')
+        self.assertNotIn('preload', r['Strict-Transport-Security'])
 
     def test_disallowed_host_is_rejected(self):
         self.assertEqual(self.client.get('/', HTTP_HOST='evil.example.com').status_code, 400)
