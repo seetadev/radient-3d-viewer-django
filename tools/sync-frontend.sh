@@ -10,5 +10,6 @@ rm -rf "$dst/vendor" "$dst/models"
 mkdir -p "$dst/models"
 cp "$src/static/app.js" "$dst/app.js"
 cp -r "$src/static/vendor" "$dst/vendor"
+cp "$src/tools/minify.mjs" "$dst/../../tools/minify.mjs"   # build-time minifier used by the Dockerfile
 cp "$src"/models/*.glb "$dst/models/"
 echo "synced from radient-3d-viewer @ $(git -C "$src" rev-parse HEAD)"

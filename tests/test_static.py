@@ -2,6 +2,7 @@
 import http.client
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.test import Client, TestCase, override_settings
 
 MODELS = ['spacesuit', 'lamborghini', 'leeperrysmith', 'factory', 'elephant']
 
@@ -39,3 +40,21 @@ class StaticServingTest(StaticLiveServerTestCase):
     def test_legacy_json_models_and_old_libs_are_gone(self):
         for p in ('spacesuit.js', 'three.min.js', 'jquery-2.2.0.min.js', 'scripts.js'):
             self.assertEqual(self.raw_get('/static/' + p)[0], 404, p)
+
+
+class WhiteNoiseTest(TestCase):
+    """The production image serves static files through WhiteNoise, not runserver."""
+
+    def test_whitenoise_middleware_is_first(self):
+        from django.conf import settings
+        self.assertEqual(settings.MIDDLEWARE[0], 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+    def test_whitenoise_serves_static_with_debug_off(self):
+        with override_settings(DEBUG=False, WHITENOISE_USE_FINDERS=True, WHITENOISE_AUTOREFRESH=True):
+            r = Client().get('/static/models/spacesuit.glb')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'model/gltf-binary')
+
+    def test_glb_mimetype_registered_explicitly(self):
+        from django.conf import settings
+        self.assertEqual(settings.WHITENOISE_MIMETYPES['.glb'], 'model/gltf-binary')

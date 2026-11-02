@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+node_modules
+tests
+test-results
+playwright-report
+staticfiles
+**/__pycache__
+*.sqlite3
+*.md

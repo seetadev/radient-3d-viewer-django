@@ -60,7 +60,19 @@ MEDIA_URL = ''
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
 # Example: "/home/media/media.lawrence.com/static/"
-STATIC_ROOT = path.join(PROJECT_ROOT, 'static').replace('\\', '/')
+STATIC_ROOT = path.join(PROJECT_ROOT, 'staticfiles')
+
+# WhiteNoise serves collected static files (gzip/brotli precompressed at collectstatic time).
+# Slim images have no /etc/mime.types, so register the glTF type explicitly.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
+WHITENOISE_MIMETYPES = {'.glb': 'model/gltf-binary'}
+# Always serve the collected, precompressed files (WhiteNoise would otherwise follow DEBUG and
+# bypass them). `runserver` serves static files itself, so development is unaffected.
+WHITENOISE_USE_FINDERS = False
+WHITENOISE_AUTOREFRESH = False
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
@@ -86,6 +98,7 @@ STATICFILES_FINDERS = [
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

@@ -1,0 +1,24 @@
+services:
+  web:
+    build: .
+    image: radient-3d-viewer-django:local
+    environment:
+      PORT: "8000"
+      # Required: the app refuses to start without it. Set it in .env (see .env.example).
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/', headers={'Host': 'localhost'}), timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

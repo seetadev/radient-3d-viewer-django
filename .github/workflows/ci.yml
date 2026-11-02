@@ -73,3 +73,35 @@ jobs:
       - run: pip-audit -r requirements.txt
       - run: npm ci
       - run: npm audit
+
+  docker:
+    name: docker build + container browser flow
+    runs-on: ubuntu-latest
+    env:
+      HOST_PORT: "8000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build and start (waits for the healthcheck)
+        run: docker compose up -d --build --wait
+      - name: Container runs as non-root with a read-only filesystem
+        run: |
+          test "$(docker compose exec -T web id -u)" != "0"
+          ! docker compose exec -T web sh -c 'touch /app/x'
+      - name: Static assets are served compressed with the right MIME type
+        run: |
+          for p in /static/models/elephant.glb /static/vendor/three/build/three.core.js; do
+            curl -s -D- -o /dev/null -H 'Accept-Encoding: gzip' "http://localhost:8000$p" | grep -i 'content-encoding: gzip'
+          done
+          curl -s -D- -o /dev/null http://localhost:8000/static/models/spacesuit.glb | grep -i 'content-type: model/gltf-binary'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Playwright against the container
+        run: E2E_NO_SERVER=1 E2E_PORT=8000 npx playwright test
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down

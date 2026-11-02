@@ -3,10 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "description": "Browser tests for the Django-hosted viewer. The viewer frontend itself is synced from radient-3d-viewer (tools/sync-frontend.sh).",
-  "engines": { "node": ">=22" },
-  "scripts": { "test:e2e": "playwright test" },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "minify": "node tools/minify.mjs app/static"
+  },
   "devDependencies": {
     "@playwright/test": "1.64.1",
+    "esbuild": "0.28.2",
     "pngjs": "7.0.0"
   }
 }
