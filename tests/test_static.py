@@ -45,9 +45,13 @@ class StaticServingTest(StaticLiveServerTestCase):
 class WhiteNoiseTest(TestCase):
     """The production image serves static files through WhiteNoise, not runserver."""
 
-    def test_whitenoise_middleware_is_first(self):
+    def test_whitenoise_middleware_runs_after_security_and_before_common(self):
         from django.conf import settings
-        self.assertEqual(settings.MIDDLEWARE[0], 'whitenoise.middleware.WhiteNoiseMiddleware')
+        mw = settings.MIDDLEWARE
+        self.assertLess(mw.index('django.middleware.security.SecurityMiddleware'),
+                        mw.index('whitenoise.middleware.WhiteNoiseMiddleware'))
+        self.assertLess(mw.index('whitenoise.middleware.WhiteNoiseMiddleware'),
+                        mw.index('django.middleware.common.CommonMiddleware'))
 
     def test_whitenoise_serves_static_with_debug_off(self):
         with override_settings(DEBUG=False, WHITENOISE_USE_FINDERS=True, WHITENOISE_AUTOREFRESH=True):

@@ -10,6 +10,7 @@ permissions:
 
 env:
   DJANGO_SECRET_KEY: ci-only-not-a-real-key
+  DJANGO_ALLOWED_HOSTS: localhost
 
 jobs:
   unit:
@@ -29,6 +30,11 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -W error manage.py check
       - run: python manage.py makemigrations --check --dry-run
+      - name: manage.py check --deploy is clean (production env, generated throwaway key)
+        run: |
+          export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(60))')"
+          DJANGO_ALLOWED_HOSTS=viewer.example.org DJANGO_TRUST_PROXY_SSL=1 \
+            python manage.py check --deploy --fail-level WARNING
       - run: pytest -v
 
   e2e:

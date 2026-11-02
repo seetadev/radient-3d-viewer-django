@@ -22,12 +22,12 @@ COPY Radient_Django Radient_Django
 COPY app app
 COPY --from=assets /build/app/static app/static
 # The key is only needed to import settings; the real one comes from the environment at run time.
-RUN DJANGO_SECRET_KEY=build-time-only python manage.py collectstatic --noinput
+RUN DJANGO_SECRET_KEY=build-time-only DJANGO_ALLOWED_HOSTS=localhost python manage.py collectstatic --noinput
 
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin radient
 USER 10001
 EXPOSE 8000
-# ALLOWED_HOSTS is still ['localhost'] (made configurable in the security PR), so send that Host header.
+# Send the Host header Django expects and X-Forwarded-Proto so the check also works with HTTPS-only + proxy-trust.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
-  CMD python -c "import os,urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:%s/' % os.environ.get('PORT','8000'), headers={'Host':'localhost'}), timeout=2)"
+  CMD python -c "import os,urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:%s/' % os.environ.get('PORT','8000'), headers={'Host':'localhost','X-Forwarded-Proto':'https'}), timeout=2)"
 CMD ["sh", "-c", "exec gunicorn Radient_Django.wsgi --bind 0.0.0.0:${PORT} --workers 2 --worker-tmp-dir /dev/shm --no-control-socket --access-logfile -"]

@@ -7,7 +7,7 @@
     <link href="{% static 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet"/>
     <link href="{% static 'custom-slider.css' %}" rel="stylesheet"/>
     <link href="{% static 'styles.css' %}" rel="stylesheet"/>
-    <script type="importmap">
+    <script type="importmap" nonce="{{ request.csp_nonce }}">
     {
       "imports": {
         "three": "{% static 'vendor/three/build/three.module.js' %}",

@@ -15,7 +15,7 @@ export default defineConfig({
   webServer: process.env.E2E_NO_SERVER ? undefined : {
     command: `${process.env.PYTHON || 'python'} manage.py runserver ${port} --noreload`,
     url: `http://localhost:${port}/`,
-    env: { DJANGO_SECRET_KEY: process.env.DJANGO_SECRET_KEY || 'e2e-only-not-a-real-key' },
+    env: { DJANGO_SECRET_KEY: process.env.DJANGO_SECRET_KEY || 'e2e-only-not-a-real-key', DJANGO_DEBUG: '1' }, // dev server serves static files itself
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

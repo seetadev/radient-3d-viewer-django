@@ -6,6 +6,11 @@ services:
       PORT: "8000"
       # Required: the app refuses to start without it. Set it in .env (see .env.example).
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      # Local plain-HTTP default. In production leave HTTPS-only ON (set to 1) behind a TLS proxy.
+      DJANGO_HTTPS_ONLY: ${DJANGO_HTTPS_ONLY:-0}
+      DJANGO_TRUST_PROXY_SSL: ${DJANGO_TRUST_PROXY_SSL:-0}
+      # DJANGO_DEBUG is intentionally not set: debug is off by default
     ports:
       - "${HOST_PORT:-8000}:8000"
     read_only: true
@@ -17,7 +22,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/', headers={'Host': 'localhost'}), timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/', headers={'Host': 'localhost', 'X-Forwarded-Proto': 'https'}), timeout=2)"]
       interval: 15s
       timeout: 3s
       retries: 3

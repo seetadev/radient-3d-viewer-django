@@ -4,11 +4,29 @@ Django settings for Radient_Django project.
 
 import os
 from os import path
+
+from django.core.exceptions import ImproperlyConfigured
+
 PROJECT_ROOT = path.dirname(path.abspath(path.dirname(__file__)))
 
-DEBUG = True
 
-ALLOWED_HOSTS = ['localhost']
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    return default if value is None else value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+# Secure by default: DEBUG is off unless DJANGO_DEBUG=1 (development only).
+DEBUG = env_bool('DJANGO_DEBUG', False)
+
+# Refuse to start in production without an explicit host list.
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
+if not ALLOWED_HOSTS:
+    if DEBUG:
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+    else:
+        raise ImproperlyConfigured(
+            'DJANGO_ALLOWED_HOSTS is required when DJANGO_DEBUG is off '
+            '(comma-separated host names, e.g. "viewer.example.org").')
 
 ADMINS = (
     # ('Your Name', 'your_email@example.com'),
@@ -95,16 +113,41 @@ STATICFILES_FINDERS = [
 
 # Loaded from the environment. The previous hardcoded key was committed to a
 # public repo and must be considered compromised.
-SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured('DJANGO_SECRET_KEY is required (see .env.example).')
 
 MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'app.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# --- HTTP security headers / transport security ---------------------------------------------
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'no-referrer'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+
+# Everything below is on by default outside DEBUG. For plain-HTTP local runs of the production
+# image (docker compose on localhost) set DJANGO_HTTPS_ONLY=0; never do that in production.
+HTTPS_ONLY = env_bool('DJANGO_HTTPS_ONLY', not DEBUG)
+SECURE_SSL_REDIRECT = HTTPS_ONLY
+SESSION_COOKIE_SECURE = HTTPS_ONLY
+CSRF_COOKIE_SECURE = HTTPS_ONLY
+SECURE_HSTS_SECONDS = 31536000 if HTTPS_ONLY else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS_ONLY
+# Only trust X-Forwarded-Proto when explicitly told a TLS-terminating proxy sets it.
+if env_bool('DJANGO_TRUST_PROXY_SSL', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# HSTS preload is a long-lived, hard-to-undo commitment for the whole domain; deliberately not enabled.
+SILENCED_SYSTEM_CHECKS = ['security.W021']
 
 ROOT_URLCONF = 'Radient_Django.urls'
 
