@@ -1,34 +1,37 @@
-"""
-This file demonstrates writing tests using the unittest module. These will pass
-when you run "manage.py test".
-"""
-
-import django
+from django.contrib.staticfiles import finders
 from django.test import TestCase
 
-# TODO: Configure your database in settings.py and sync before running tests.
+MODELS = ['spacesuit', 'lamborghini', 'leeperrysmith', 'factory', 'elephant']
+
 
 class ViewTest(TestCase):
     """Tests for the application views."""
 
-    if django.VERSION[:2] >= (1, 7):
-        # Django 1.7 requires an explicit setup() when running tests in PTVS
-        @classmethod
-        def setUpClass(cls):
-            super(ViewTest, cls).setUpClass()
-            django.setup()
-
     def test_home(self):
-        """Tests the home page."""
+        """The home page serves the viewer as an ES module with an import map."""
         response = self.client.get('/')
-        self.assertContains(response, 'Home Page', 1, 200)
+        self.assertContains(response, 'RADIENT 3D VIEWER', status_code=200)
+        self.assertContains(response, 'type="importmap"')
+        self.assertContains(response, 'type="module" src="/static/app.js"')
+        self.assertContains(response, 'data-models-url="/static/models/"')
 
-    def test_contact(self):
-        """Tests the contact page."""
-        response = self.client.get('/contact')
-        self.assertContains(response, 'Contact', 3, 200)
+    def test_model_buttons_match_models(self):
+        response = self.client.get('/')
+        for name in MODELS:
+            self.assertContains(response, '>%s</button>' % name)
 
-    def test_about(self):
-        """Tests the about page."""
-        response = self.client.get('/about')
-        self.assertContains(response, 'About', 3, 200)
+
+class AssetTest(TestCase):
+    """The viewer's JS, vendored libs and GLB models must be resolvable as static files."""
+
+    def test_viewer_assets_exist(self):
+        paths = ['app.js', 'vendor/three/build/three.module.js', 'vendor/three/build/three.core.js',
+                 'vendor/three/addons/loaders/GLTFLoader.js', 'vendor/bootstrap/bootstrap.min.css',
+                 'cubemap/px.jpg'] + ['models/%s.glb' % m for m in MODELS]
+        for p in paths:
+            self.assertIsNotNone(finders.find(p), 'missing static file: ' + p)
+
+    def test_models_are_glb(self):
+        for m in MODELS:
+            with open(finders.find('models/%s.glb' % m), 'rb') as f:
+                self.assertEqual(f.read(4), b'glTF', m)
