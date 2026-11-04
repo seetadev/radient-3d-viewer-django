@@ -124,9 +124,9 @@ def test_sidecar_requires_the_secret_on_every_route_but_health():
     assert raw_http("GET", "/health", token="")[0] == 200
 
 
-@pytest.mark.xfail(strict=False, reason="upstream sidecar bug (Tornado-Backend-Stack#15, 8afe218): an upload with no Content-Type "
+@pytest.mark.xfail(strict=False, reason="upstream sidecar bug, fixed in Tornado-Backend-Stack#15 (a114973); fails against older sidecar builds: an upload with no Content-Type "
                                          "header is answered 200 with the EMPTY-file CID and nothing is stored. HeliaClient always "
-                                         "sends application/octet-stream, so it is not affected. Passes (XPASS) once fixed upstream.")
+                                         "sends application/octet-stream, so it is not affected. XPASSes against a114973 and later.")
 def test_sidecar_should_not_silently_store_nothing_when_content_type_is_missing():
     status, body = raw_http("POST", "/upload", b"hello world", content_type=None)
     assert status != 200 or json.loads(body)["cid"] == raw_cid(b"hello world")

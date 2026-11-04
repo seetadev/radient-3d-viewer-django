@@ -4,7 +4,7 @@ Status: **planning + scaffold only.** `app/helia_client.py` is a tested client; 
 
 The app never embeds Helia. It calls the **Helia sidecar** (`meshkit-sidecar-helia`, in `seetadev/Tornado-Backend-Stack`) over HTTP.
 
-## The sidecar contract (read from the source at commit `8afe218`, then confirmed by running it)
+## The sidecar contract (read from the source at commit `8afe218`, confirmed by running it, and re-verified at `a114973`)
 
 | Call | Behaviour |
 |---|---|
@@ -18,7 +18,7 @@ Verified against the real sidecar (`tests/integration/test_helia_real.py`): a 47
 
 Not in the sidecar: **delete**, per-user ownership, and (offline mode) any replication or fetching from the network. Payloads over one chunk (1 MiB) get a DAG root CID, so the client cannot recompute the CID to check the bytes; keep a separate `sha256`.
 
-**Sidecar bug found while testing (commit `8afe218`):** `POST /upload` **without a `Content-Type` header** is answered `200` with the CID of an *empty* file (`bafkreihdwdcef...`) and **nothing is stored** (the body is never parsed, so the size limit is not enforced either). Clients must always send `Content-Type: application/octet-stream`; `HeliaClient` and the Tornado proxy do. An `xfail` integration test documents the desired behaviour and flips to XPASS when it is fixed upstream.
+**Sidecar bug found while testing, now fixed (commit `8afe218` had it):** `POST /upload` **without a `Content-Type` header** was answered `200` with the CID of an *empty* file and **nothing was stored** (and the size limit was skipped). Fixed in [Tornado-Backend-Stack#15](https://github.com/seetadev/Tornado-Backend-Stack/pull/15) (`a114973`): a missing `Content-Type` is treated as `application/octet-stream` and an empty body is a `400`. The clients here always send `Content-Type: application/octet-stream` anyway, so they work against both. The integration test for it is `xfail` (`todo` in the add-on): it fails against an old sidecar without failing the run, and reports `XPASS` / passes against `a114973` (verified).
 
 Tornado-Backend-Stack also has a proxy, `/meshkit-helia/*` (`handlers/meshkit.py`), that holds the secret and maps errors the same way (unreachable -> 502, slow -> 504, 413/400 locally). It has **no caller authentication** (only a CORS allowlist, which is not authentication) and no `/health` route, and its `/list` is open. See the add-on's document for why that matters.
 
@@ -80,7 +80,7 @@ When this is wired in, read the `HELIA_*` variables in `Radient_Django/settings.
 
 ```bash
 git clone git@github.com:seetadev/Tornado-Backend-Stack.git ../Tornado-Backend-Stack
-git -C ../Tornado-Backend-Stack checkout 8afe218
+git -C ../Tornado-Backend-Stack checkout a114973
 export HELIA_SIDECAR_BUILD_CONTEXT=$PWD/../Tornado-Backend-Stack/meshkit-sidecar-helia
 export HELIA_SIDECAR_SECRET=$(openssl rand -hex 32)
 docker compose -f tests/integration/docker-compose.helia.yml up -d --build --wait
